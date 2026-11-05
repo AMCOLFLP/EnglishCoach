@@ -1,0 +1,206 @@
+ENGLISH AI SPEAKING COACH — GITHUB AND MOBILE QUICK START
+Version: 2.0.0
+Prepared: 5 November 2026
+
+For regular phone use, publish the complete project to GitHub Pages and use
+its HTTPS address in the same browser. The separate HTML file is convenient
+for a quick guided preview, but mobile file storage varies by browser.
+
+FILES
+1. English_Speaking_Coach_GitHub.zip — editable source, public assets, manifest,
+   service worker, GitHub Actions workflow, tests, docs, and optional AI backend.
+2. English_Speaking_Coach.html — a self-contained guided edition to open locally.
+   It contains the code and learning material; it is not the full hosted PWA
+   deployment with separate manifest/service-worker files.
+3. GitHub_Deployment_Guide.txt — this guide.
+
+SIMPLE GITHUB PAGES DEPLOYMENT — NO LOCAL BUILD
+1. Extract the ZIP. Upload the extracted contents, not the ZIP itself and not
+   an extra enclosing project folder.
+2. Create a GitHub repository, for example english-speaking-coach.
+3. Upload the project to main. The repository root must contain:
+   - index.html
+   - manifest.webmanifest
+   - sw.js
+   - the complete assets/ folder, including all scripts and installation icons
+   - .nojekyll
+   Keep icon-192.png, icon-512.png, and apple-touch-icon.png inside assets/.
+4. Open Settings > Pages > Build and deployment.
+5. Choose Deploy from a branch, select main and /(root), then save.
+6. Wait for deployment and open the HTTPS URL shown in Pages settings.
+   It normally resembles:
+   https://YOUR-USERNAME.github.io/english-speaking-coach/
+7. Visit #/device online. Check saving status and wait for offline readiness
+   before trying an offline reload. Test speech features on your own devices.
+
+For this branch method, omit .github/workflows/deploy-pages.yml.
+
+ALTERNATIVE: INCLUDED GITHUB ACTIONS WORKFLOW
+Upload the full source including .github/workflows/deploy-pages.yml. Choose
+GitHub Actions as the Pages source, then push to main or run the workflow
+manually. It runs source validation, the current automated tests, and the
+static build before deployment. No local Node.js installation is required.
+
+The workflow publishes dist/. Its output must contain index.html, the root
+manifest.webmanifest and sw.js, .nojekyll, and all public assets. The manifest
+and service worker are needed for the hosted installation/offline features.
+
+Relative asset URLs and hash routes work under a repository path. For example:
+https://YOUR-USERNAME.github.io/english-speaking-coach/#/lessons
+
+GitHub publishing instructions:
+https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+
+WHAT IS INCLUDED
+- 13 original A1–B1 lessons across everyday, travel, work/study and maritime
+  English, including ordering food and drinks.
+- 78 vocabulary entries with optional Thai hints.
+- 7 guided conversations, each with 4 learner turns.
+- 14 read-aloud phrase activities and typed/transcript word comparison.
+- 35 explained quiz questions; up to 10 per attempt after filtering.
+- An English/Thai feature guide at #/features.
+- Up to 8 local learner profiles at #/profiles.
+- Separate progress, preferences, notes and drafts for each local profile.
+- Automatic saving of notes and unfinished speaking/pronunciation text.
+- Saving/offline status, installation help and backup controls at #/device.
+- Daily goals, achievements and real local participation rankings.
+- Browser read-aloud and microphone transcription where supported.
+- Typed practice whenever microphone access is unavailable.
+
+LOCAL PROFILES ARE NOT ONLINE LOGIN
+Choose a profile before practising. Anyone using the same browser can switch
+profiles; there is no password protection, verified identity, cloud account,
+teacher database, or automatic device sync.
+
+Keep using the same browser and site URL to return to the same local collection.
+The app separates collections by the deployed site path. A different browser,
+device, domain, protocol, or repository path can open a different collection.
+The original english-coach.v1 data is migrated without deleting the old entry.
+
+SAVING ON A PHONE
+1. Open the GitHub HTTPS site online in your regular browser, outside private
+   browsing, and choose your profile.
+2. Notes and unfinished speaking/pronunciation text save as you edit. Check the
+   visible saved status before closing. A failed save is reported as a failure.
+3. Complete an activity to add it to progress. A saved draft, unfinished quiz,
+   or unfinished conversation does not count as a completed activity.
+4. Open #/device to check offline readiness. After the first complete load and
+   successful cache, core lessons, quizzes and guided text practice can reopen
+   offline. AI and some browser speech services still need the internet.
+5. Use installation or Add to Home Screen if your browser offers it. You can
+   also request persistent storage from the device page. The browser may decline.
+   Neither installation nor a storage request guarantees permanent data storage.
+6. Export backups regularly, especially before changing devices or clearing data.
+
+The app does not create raw audio recordings or save complete conversation
+transcripts. Avoid putting private information in practice text or notes on a
+shared device. Directly opened HTML files may have different storage behavior;
+moving or renaming them can affect which saved data is available.
+
+BACKUPS AND MOVING DEVICES
+Export from My progress, Settings or the device page. Each backup contains ONLY
+the selected profile's preferences, notes and completed progress. Export every
+profile separately if needed. Unfinished drafts, raw audio, full conversations,
+and AI access codes are not included.
+
+The progress-backup format remains version 1 and accepts valid older version-1
+exports. Import asks for confirmation, replaces the current profile's saved
+state, and clears its unfinished drafts. It does not merge histories or replace
+other profiles. Reset also requires confirmation.
+
+Transfer the exported file to another device and import it into the profile you
+want to replace. Copy unfinished text separately if you want to transfer it.
+Backups may contain display names and notes, so keep them in a suitable location.
+
+Private browsing, storage restrictions, or clearing site data can remove saved
+work. Browser storage and an installed app are not substitutes for a backup.
+
+WHAT THE SCORES MEAN
+- Word-match percentages compare text, whether typed or transcribed. They do
+  not detect acoustic pronunciation errors or measure accent, spoken fluency,
+  or a CEFR level. Recognition may mishear clear speech.
+- Quiz results describe answers to that practice question set.
+- Local leaderboard points equal 10 per saved completed activity plus 20 per
+  completed lesson. They rank participation in this browser/site only.
+- Achievement badges reflect recorded learning milestones, not qualifications.
+- Optional AI text-review ratings cover task, clarity, grammar and vocabulary,
+  each from 0 to 5. The overall score is 5 times their sum, from 0 to 100.
+  It is formative text feedback, not an audio assessment or official exam score.
+
+OPTIONAL REAL AI
+Guided practice is available without AI. Adaptive conversation and model-generated
+feedback require the separate server in server/. GitHub Pages does not run it.
+
+1. Follow server/README.md to deploy the Cloudflare Worker and configure secrets.
+2. Set aiEndpoint in assets/config.js to the full HTTPS endpoint ending in /coach.
+3. Allow your exact website origin on the server, without the repository path:
+   https://YOUR-USERNAME.github.io
+4. Enable AI in the site's settings and enter the classroom access code.
+
+Never put an OpenAI API key in frontend code or commit it to GitHub. The key stays
+in Worker secrets; learners use only the separate classroom code. That code is
+kept in memory and clears on reload. It is not an individual student account.
+
+The AI endpoint receives submitted text and relevant learning context, not raw
+audio. A browser's own speech service may process audio remotely. Live provider
+access, account setup and deployed behavior must be tested by the site owner.
+
+EDITING AND REBUILDING
+assets/content.js — lessons, scenarios, phrases, quizzes and bilingual guides.
+assets/styles.css — layout, colors and responsive styles.
+assets/app.js — learning views and interactions.
+assets/storage.js — local profiles, migration, drafts and storage handling.
+assets/device.js — offline, installation and browser-storage capabilities.
+assets/config.js — optional public AI endpoint and teacher contact email.
+manifest.webmanifest and sw.js — hosted installation/offline behavior.
+README.md — full setup, data behavior and verification details.
+docs/AUDIT.md — original-file findings, changes and release verification record.
+
+OPTIONAL NODE.JS COMMANDS — NODE 22 OR NEWER, NO PACKAGES TO INSTALL
+npm run check
+npm test
+npm run build
+npm run standalone
+
+Build first, then regenerate the standalone edition. The build refreshes dist/.
+Publish the full generated folder for the hosted PWA. For later raw branch
+deployments, change CACHE_VERSION in sw.js whenever a cached page, script,
+stylesheet or icon changes. The build/Actions method adds an asset-content hash
+to the generated worker automatically. Existing users can check #/device online
+and apply an available update there. Export progress before clearing browser
+data to troubleshoot old caches.
+
+VERSION 2.0.0 VERIFICATION
+Recorded on 5 November 2026:
+- Source check passed: 7 scripts; 13 lessons, 7 role plays, 14 phrases, 35 questions.
+- All 75 automated tests passed, with 0 failures: 12 core, 26 storage,
+  26 mocked-backend, and 11 offline/device/build tests.
+- Static build and standalone generation passed. The built worker uses an
+  asset-content hash. The served standalone file initialized successfully.
+- Browser checks restored a topic-specific food-speaking draft and English/Thai
+  notes after reload, verified separate profiles and local ranking updates,
+  completed the four-turn café role play, and exercised the Thai guidance toggle.
+- A stale-tab save conflict was shown clearly. Export retained unsaved notes;
+  explicit reload recovered the other tab's saved notes. Backup import restored
+  the tested name, notes and activity without removing the other profiles.
+- Phone, tablet, desktop and landscape frame checks found no document-wide
+  horizontal overflow in the reviewed pages. A short settings dialog retained
+  its Save/Cancel footer, and the mobile More drawer kept focus inside.
+- A deep route and reload worked in a repository-subfolder fixture with its own
+  local profile collection.
+
+The preview used insecure HTTP. Service-worker behavior was tested with mocks;
+actual HTTPS offline navigation, installation and persistence grants were not
+browser-tested. Storage migration/corruption/failure tests were automated,
+not injected browser scenarios. Physical iOS/Android devices, software keyboards,
+real microphone/audio output, live AI credentials and Cloudflare hosting were
+not exercised. No GitHub deployment has been published, and no API credentials
+are supplied. See docs/AUDIT.md for detailed results and the archive-check record.
+
+BROWSER REFERENCES
+Persistent storage requests:
+https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
+PWA installation:
+https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable
+Local-file/browser storage behavior:
+https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage

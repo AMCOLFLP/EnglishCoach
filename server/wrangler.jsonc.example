@@ -1,0 +1,30 @@
+{
+  "name": "english-speaking-coach-api",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-05",
+  "workers_dev": true,
+  "vars": {
+    // Origins have no path, trailing slash, query, or wildcard.
+    // Example project URL: https://yourname.github.io/english-speaking-coach/
+    // Corresponding origin: https://yourname.github.io
+    "ALLOWED_ORIGINS": "https://your-github-username.github.io",
+    "OPENAI_MODEL": "gpt-5.4-mini",
+    "RESPONSE_TIMEOUT_MS": "20000"
+  },
+  // Both bindings are required. These limits are approximate per Cloudflare
+  // location, not a guaranteed global spending cap. Use account-unique IDs.
+  "ratelimits": [
+    {
+      "name": "COACH_RATE_LIMITER",
+      "namespace_id": "101001",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "COACH_CLASSROOM_LIMITER",
+      "namespace_id": "101002",
+      "simple": { "limit": 180, "period": 60 }
+    }
+  ]
+  // Set OPENAI_API_KEY and COACH_ACCESS_TOKEN with `wrangler secret put`.
+  // Never put either value in this file or in the static website.
+}
