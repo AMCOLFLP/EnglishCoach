@@ -448,6 +448,11 @@ dialog::backdrop { background:#19372c66; backdrop-filter:blur(5px); }
 .notes-actions { justify-content:space-between; gap:16px; align-items:center; }
 #notes-save-status { font-size:12px; color:var(--muted); }
 .profile-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:24px 0; }
+.profile-welcome { max-width:620px; margin:0 auto; }
+.profile-welcome h2 { margin-top:20px; }
+.profile-welcome form { margin-top:26px; }
+.profile-welcome #profile-error:not(:empty) { margin-bottom:16px; color:var(--danger, #a33030); }
+.profile-welcome .profile-links { margin-bottom:0; }
 .learner-card { display:flex; flex-direction:column; }
 .learner-card.selected { border-color:#9dbb89; background:#f3f8ee; box-shadow:0 0 0 2px #cadfc04d; }
 .learner-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }

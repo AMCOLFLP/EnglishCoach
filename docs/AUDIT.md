@@ -1,6 +1,6 @@
 # Content and technical audit
 
-**Project:** English AI Speaking Coach  
+**Project:** English Speaking Coach<br>
 **Documented version:** 2.0.0  
 **Audit date:** 5 November 2026  
 **Source attachment:** `English AI Speaking Coach — Practice English with AI.html`

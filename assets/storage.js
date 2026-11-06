@@ -48,6 +48,15 @@
     return undefined;
   }
 
+  function normalizePreferences(raw) {
+    const preferences = {};
+    for (const key of ['showThaiGuide', 'lastRoute']) {
+      const value = preference(key, record(raw) ? raw[key] : undefined);
+      if (value !== undefined) preferences[key] = value;
+    }
+    return preferences;
+  }
+
   /**
    * A store owns one namespace on this origin. load() is cached; reload() is an
    * explicit discard-and-reread operation. All returned records are snapshots.
@@ -137,13 +146,13 @@
       return result(false, known ? error.code : 'write-failed', known ? error.available !== false : true);
     }
 
-    function makeProfile(state, existing = []) {
+    function makeProfile(state, existing = [], setupComplete = true) {
       return { id: nextID(existing), state: core.normalizeState(state), updatedAt: now(), revision: 0,
-        drafts: {}, preferences: {} };
+        drafts: {}, preferences: {}, setupComplete };
     }
 
-    function makeVault(state) {
-      const profile = makeProfile(state);
+    function makeVault(state, setupComplete = false) {
+      const profile = makeProfile(state, [], setupComplete);
       return { version: 2, activeProfileId: profile.id, updatedAt: profile.updatedAt, profiles: [profile] };
     }
 
@@ -158,7 +167,8 @@
             || !record(item.state) || item.state.version !== 1 || !record(item.state.profile)
             || !Array.isArray(item.state.sessions) || !Array.isArray(item.state.completedLessons)
             || typeof item.state.notes !== 'string'
-            || (item.revision !== undefined && (!Number.isSafeInteger(item.revision) || item.revision < 0))) {
+            || (item.revision !== undefined && (!Number.isSafeInteger(item.revision) || item.revision < 0))
+            || (item.setupComplete !== undefined && typeof item.setupComplete !== 'boolean')) {
           throw issue('corrupt-data');
         }
         ids.add(item.id);
@@ -171,13 +181,10 @@
             if (cleaned) drafts[key] = cleaned;
           }
         }
-        const preferences = {};
-        for (const key of ['showThaiGuide', 'lastRoute']) {
-          const value = preference(key, record(item.preferences) ? item.preferences[key] : undefined);
-          if (value !== undefined) preferences[key] = value;
-        }
+        const preferences = normalizePreferences(item.preferences);
+        // Existing v2 learners predate onboarding and must remain ready to use.
         return { id: item.id, state, updatedAt: timestamp(item.updatedAt), revision: item.revision || 0,
-          drafts, preferences };
+          drafts, preferences, setupComplete: item.setupComplete !== false };
       });
       if (!ids.has(raw.activeProfileId)) throw issue('corrupt-data');
       return { version: 2, activeProfileId: raw.activeProfileId, updatedAt: timestamp(raw.updatedAt), profiles };
@@ -301,7 +308,7 @@
         const legacy = readLegacy();
         initialReadComplete = true;
         migrated = legacy !== null;
-        vault = makeVault(legacy || core.newState());
+        vault = makeVault(legacy || core.newState(), migrated);
         baseline = copy(vault);
         persist(false);
       } catch (error) {
@@ -323,7 +330,8 @@
         state: copy(profile.state), updatedAt: profile.updatedAt }));
     }
     function selected() {
-      return { state: copy(active().state), activeProfileId: vault.activeProfileId, status: { ...status } };
+      return { state: copy(active().state), activeProfileId: vault.activeProfileId,
+        needsProfile: !active().setupComplete, status: { ...status } };
     }
     function load() {
       initialize();
@@ -343,7 +351,7 @@
       return persist();
     }
 
-    function replaceProfile(state) {
+    function replaceState(state, setupComplete) {
       initialize();
       let normalized;
       try { normalized = core.normalizeState(state); }
@@ -352,15 +360,33 @@
       profile.state = normalized;
       profile.drafts = {};
       profile.preferences = {};
+      profile.setupComplete = setupComplete;
       touch(profile);
       persist(true, true);
       return selected();
     }
 
-    function resetProfile() { return replaceProfile(core.newState()); }
+    function replaceProfile(state) { return replaceState(state, true); }
+    function resetProfile() {
+      initialize();
+      return replaceState(core.newState(), active().setupComplete);
+    }
 
     function createProfile(name) {
       initialize();
+      if (typeof name === 'string' && !name.trim()) {
+        failed(issue('invalid-profile-name', status.available)); return selected();
+      }
+      if (!active().setupComplete) {
+        const profile = active();
+        const state = copy(profile.state);
+        state.profile.name = typeof name === 'string' ? name : 'Learner';
+        profile.state = core.normalizeState(state);
+        profile.setupComplete = true;
+        touch(profile);
+        persist();
+        return selected();
+      }
       if (vault.profiles.length >= MAX_PROFILES) { failed(issue('profile-limit', status.available)); return selected(); }
       const before = copy(vault);
       const state = core.newState();
@@ -428,7 +454,11 @@
       const checked = preference(key, value);
       if (checked === undefined) return failed(issue('invalid-preference', status.available));
       const profile = active();
-      if (profile.preferences[key] !== checked) { profile.preferences[key] = checked; touch(profile); }
+      if (profile.preferences[key] !== checked) {
+        // Keep signature ordering identical to the normalized disk representation.
+        profile.preferences = normalizePreferences({ ...profile.preferences, [key]: checked });
+        touch(profile);
+      }
       return persist();
     }
 

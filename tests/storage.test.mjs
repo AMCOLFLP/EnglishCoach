@@ -54,6 +54,133 @@ function storedProfile(storage, store, id) {
   return JSON.parse(storage.values.get(store.keys.main)).profiles.find(profile => profile.id === id);
 }
 
+test('a new learner still needs a profile after preferences, drafts, saves, and reload', () => {
+  const memory = new MemoryStorage(), store = device(memory);
+  const first = store.load();
+  assert.equal(first.status.ok, true);
+  assert.equal(first.needsProfile, true);
+  assert.equal(first.profiles.length, 1);
+  assert.equal(storedProfile(memory, store, first.activeProfileId).setupComplete, false);
+  store.setPreference('lastRoute', '#/dashboard');
+  store.setPreference('showThaiGuide', true);
+  store.setDraft('practice:topic', 'An unfinished response');
+  first.state.profile.name = 'A name entered outside setup';
+  first.state.notes = 'Pending notes';
+  assert.equal(store.save(first.state).ok, true);
+  const reopened = device(memory).load();
+  assert.equal(reopened.needsProfile, true);
+  assert.equal(reopened.activeProfileId, first.activeProfileId);
+  assert.equal(reopened.state.notes, first.state.notes);
+});
+
+test('first profile creation completes the existing learner and returns ready on the next visit', () => {
+  const memory = new MemoryStorage(), store = device(memory);
+  const first = store.load();
+  store.setPreference('showThaiGuide', true);
+  store.setDraft('practice:topic', 'Keep this response');
+  const created = store.createProfile('  Niran\n Lee  ');
+  assert.equal(created.status.ok, true);
+  assert.equal(created.needsProfile, false);
+  assert.equal(created.activeProfileId, first.activeProfileId);
+  assert.equal(created.state.profile.name, 'Niran Lee');
+  assert.equal(store.listProfiles().length, 1);
+  assert.equal(store.getDraft('practice:topic'), 'Keep this response');
+  assert.equal(store.getPreference('showThaiGuide'), true);
+  const reopened = device(memory).load();
+  assert.equal(reopened.needsProfile, false);
+  assert.equal(reopened.activeProfileId, created.activeProfileId);
+  assert.equal(reopened.state.profile.name, 'Niran Lee');
+  const second = store.createProfile('Mina');
+  assert.equal(second.needsProfile, false);
+  assert.notEqual(second.activeProfileId, created.activeProfileId);
+  assert.equal(store.listProfiles().length, 2);
+});
+
+test('blank profile names cannot complete setup or add a learner', () => {
+  const memory = new MemoryStorage(), store = device(memory);
+  for (const setupComplete of [false, true]) {
+    if (setupComplete) store.createProfile('Mina');
+    const before = store.load(), original = memory.values.get(store.keys.main), writes = memory.writes;
+    for (const name of ['', '  ', '\n\t']) {
+      const rejected = store.createProfile(name);
+      assert.equal(rejected.status.error, 'invalid-profile-name');
+      assert.equal(rejected.needsProfile, !setupComplete);
+      assert.equal(rejected.activeProfileId, before.activeProfileId);
+      assert.deepEqual(plain(rejected.state), plain(before.state));
+      assert.equal(store.listProfiles().length, 1);
+      assert.equal(memory.values.get(store.keys.main), original);
+      assert.equal(memory.writes, writes);
+    }
+  }
+});
+
+test('existing version 2 learners without a setup marker remain ready to use', () => {
+  const memory = new MemoryStorage(), original = device(memory);
+  original.load();
+  const raw = JSON.parse(memory.values.get(original.keys.main));
+  delete raw.profiles[0].setupComplete;
+  memory.values.set(original.keys.main, JSON.stringify(raw));
+  const store = device(memory), loaded = store.load();
+  assert.equal(loaded.needsProfile, false);
+  assert.equal(loaded.state.profile.name, 'Learner');
+  store.save(loaded.state);
+  assert.equal(storedProfile(memory, store, loaded.activeProfileId).setupComplete, true);
+  assert.notEqual(store.createProfile('Another learner').activeProfileId, loaded.activeProfileId);
+});
+
+test('failed setup writes remain explicit while completion can be retried without another profile', () => {
+  const memory = new MemoryStorage(), store = device(memory);
+  const first = store.load(), original = memory.values.get(store.keys.main);
+  memory.writeError = key => key === store.keys.main ? storageError('QuotaExceededError') : null;
+  const completed = store.createProfile('Mina');
+  assert.equal(completed.needsProfile, false);
+  assert.equal(completed.status.ok, false);
+  assert.equal(completed.status.error, 'quota-exceeded');
+  assert.equal(completed.activeProfileId, first.activeProfileId);
+  assert.equal(store.listProfiles().length, 1);
+  assert.equal(memory.values.get(store.keys.main), original);
+  assert.equal(device(memory).load().needsProfile, true);
+  memory.writeError = null;
+  assert.equal(store.save(completed.state).ok, true);
+  const reopened = device(memory).load();
+  assert.equal(reopened.needsProfile, false);
+  assert.equal(reopened.state.profile.name, 'Mina');
+  assert.equal(reopened.profiles.length, 1);
+});
+
+test('unavailable storage allows session-only setup and reports that it is not durable', () => {
+  const memory = new MemoryStorage();
+  memory.readError = storageError('SecurityError');
+  const store = device(memory), first = store.load();
+  assert.equal(first.needsProfile, true);
+  const completed = store.createProfile('Mina');
+  assert.equal(completed.needsProfile, false);
+  assert.equal(completed.activeProfileId, first.activeProfileId);
+  assert.equal(completed.status.ok, false);
+  assert.equal(completed.status.available, false);
+  assert.equal(completed.status.error, 'storage-unavailable');
+  assert.equal(memory.values.size, 0);
+  assert.equal(device(memory).load().needsProfile, true);
+  memory.readError = null;
+  assert.equal(store.save(completed.state).ok, true);
+  assert.equal(device(memory).load().needsProfile, false);
+});
+
+test('import completes setup, learner reset preserves it, and device reset starts setup again', () => {
+  const memory = new MemoryStorage(), store = device(memory);
+  assert.equal(store.load().needsProfile, true);
+  assert.equal(store.resetProfile().needsProfile, true);
+  const imported = store.replaceProfile(exampleState('Imported learner'));
+  assert.equal(imported.status.ok, true);
+  assert.equal(imported.needsProfile, false);
+  assert.equal(device(memory).load().needsProfile, false);
+  assert.equal(store.resetProfile().needsProfile, false);
+  const reset = store.reset();
+  assert.equal(reset.needsProfile, true);
+  assert.equal(reset.profiles.length, 1);
+  assert.equal(device(memory).load().needsProfile, true);
+});
+
 test('legacy progress migrates without modifying its source and reloads as the same learner', () => {
   const memory = new MemoryStorage();
   const legacy = exampleState();
@@ -64,6 +191,7 @@ test('legacy progress migrates without modifying its source and reloads as the s
   const store = device(memory);
   const loaded = store.load();
   assert.equal(loaded.migrated, true);
+  assert.equal(loaded.needsProfile, false);
   assert.equal(loaded.status.ok, true);
   assert.equal(loaded.status.recovered, false);
   assert.deepEqual(plain(loaded.state), plain(core.normalizeState(legacy)));
@@ -72,6 +200,7 @@ test('legacy progress migrates without modifying its source and reloads as the s
   assert.equal(memory.values.get(store.keys.backup).includes('must-not-copy-this-key'), false);
   const reopened = device(memory).load();
   assert.equal(reopened.migrated, false);
+  assert.equal(reopened.needsProfile, false);
   assert.equal(reopened.activeProfileId, loaded.activeProfileId);
   assert.deepEqual(plain(reopened.state), plain(loaded.state));
 });
@@ -95,6 +224,7 @@ test('repository namespaces isolate vaults and backups while leaving the legacy 
 
 test('profiles preserve independent progress, drafts, preferences, and defensive snapshots', () => {
   const memory = new MemoryStorage(), store = device(memory);
+  store.createProfile('Mina');
   const first = store.load();
   assert.equal(store.save(exampleState('Mina')).ok, true);
   store.setDraft('practice:maritime-b1', 'Please explain the situation.');
@@ -292,6 +422,7 @@ test('unrecoverable corruption stays untouched until an explicit namespace reset
   memory.values.set(storageAPI.KEY, '{broken current vault');
   memory.values.set(storageAPI.BACKUP_KEY, '{broken backup');
   const store = device(memory), loaded = store.load();
+  assert.equal(loaded.needsProfile, true);
   assert.equal(loaded.status.error, 'corrupt-data');
   assert.equal(loaded.status.ok, false);
   loaded.state.notes = 'Keep the current attempt in memory';
@@ -347,6 +478,7 @@ test('vault normalization excludes unsafe fields while retaining bounded learner
 
 test('same-origin tabs preserve newer unrelated learner profiles when saving', () => {
   const memory = new MemoryStorage(), seed = device(memory);
+  seed.createProfile('First learner');
   const firstID = seed.load().activeProfileId;
   const secondID = seed.createProfile('Second learner').activeProfileId;
   seed.switchProfile(firstID);
@@ -400,6 +532,7 @@ test('even a no-op save cannot silently swap the app state after another tab cha
 
 test('deleting a learner in another tab cannot redirect a stale save into a remaining profile', () => {
   const memory = new MemoryStorage(), left = device(memory);
+  left.createProfile('First learner');
   const firstID = left.load().activeProfileId;
   const secondID = left.createProfile('Remaining learner').activeProfileId;
   left.switchProfile(firstID);
@@ -414,7 +547,7 @@ test('deleting a learner in another tab cannot redirect a stale save into a rema
 
 test('profile limits and duplicate ID generators never change selection on a rejected creation', () => {
   const memory = new MemoryStorage(), store = device(memory, { makeID: () => 'same-id' });
-  store.load();
+  store.createProfile('First learner');
   for (let i = 1; i < storageAPI.MAX_PROFILES; i++) assert.equal(store.createProfile(`Learner ${i}`).status.ok, true);
   const before = store.load();
   const rejected = store.createProfile('Too many');
@@ -428,7 +561,7 @@ test('profile limits and duplicate ID generators never change selection on a rej
 
 test('a concurrent last-slot creation preserves the winner and leaves the rejected tab on its previous learner', () => {
   const memory = new MemoryStorage(), seed = device(memory);
-  seed.load();
+  seed.createProfile('First learner');
   for (let i = 1; i < 7; i++) seed.createProfile(`Learner ${i}`);
   const left = device(memory), before = left.load();
   const right = device(memory); right.load();
@@ -445,6 +578,7 @@ test('a concurrent last-slot creation preserves the winner and leaves the reject
 
 test('profile deletion leaves a usable selected learner and rejects removal of the last profile', () => {
   const memory = new MemoryStorage(), store = device(memory);
+  store.createProfile('First learner');
   const first = store.load();
   const lastFailure = store.deleteProfile(first.activeProfileId);
   assert.equal(lastFailure.status.error, 'last-profile');
@@ -460,6 +594,7 @@ test('profile deletion leaves a usable selected learner and rejects removal of t
 
 test('profile replacement and reset atomically clear only the selected learner’s state, drafts, and preferences', () => {
   const memory = new MemoryStorage(), store = device(memory);
+  store.createProfile('First learner');
   const firstID = store.load().activeProfileId;
   store.save(exampleState());
   store.setDraft('practice:topic', 'A draft for the first learner');
@@ -509,6 +644,7 @@ test('cleared drafts cannot return through recovery while other drafts remain in
 test('profile reset and replacement remove prior learner data from both durable copies', () => {
   for (const operation of ['reset', 'replace']) {
     const memory = new MemoryStorage(), store = device(memory);
+    store.createProfile('First learner');
     const target = store.load().activeProfileId;
     store.save(exampleState('Prior learner name'));
     store.setDraft('practice:topic', 'Prior learner draft');
@@ -534,6 +670,7 @@ test('profile reset and replacement remove prior learner data from both durable 
 
 test('deleting a nonactive profile purges its recovery data and preserves newer unrelated work', () => {
   const memory = new MemoryStorage(), seed = device(memory);
+  seed.createProfile('First learner');
   const firstID = seed.load().activeProfileId;
   const removedID = seed.createProfile('Removed learner').activeProfileId;
   seed.setDraft('practice:topic', 'Removed learner text');

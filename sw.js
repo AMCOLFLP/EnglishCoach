@@ -3,7 +3,7 @@
  * changes. scripts/build.mjs adds a content hash of every shipped file and this
  * worker to the dist version automatically. A waiting update is user-applied.
  */
-const CACHE_VERSION = 'v2.0.0';
+const CACHE_VERSION = 'v2.0.1';
 const SCOPE = new URL(self.registration.scope);
 const CACHE_PREFIX = `english-coach:${encodeURIComponent(SCOPE.pathname)}:`;
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;

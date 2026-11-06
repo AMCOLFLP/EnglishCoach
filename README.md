@@ -1,4 +1,4 @@
-# English AI Speaking Coach
+# English Speaking Coach
 
 **Version 2.0.0** — a responsive English practice website for A1–B1 learners, with everyday, travel, work/study, and maritime activities, optional Thai vocabulary hints, and an English/Thai feature guide.
 
@@ -30,7 +30,7 @@ The material is newly authored for this rebuild. The attachment supplied only th
 
 For regular phone use, publish the complete project to GitHub Pages and keep using the same HTTPS site URL in the same browser.
 
-1. Open the deployed site while online and choose or create your learner profile at `#/profiles`.
+1. Open the deployed site while online. On your first visit, create a learner profile; if a profile is already saved, the site opens your progress dashboard automatically. You can switch or add learners at `#/profiles`.
 2. Try a short lesson or type a practice response. Notes and unfinished speaking/pronunciation text save automatically; completed activities are added to progress when finished.
 3. Open `#/device` and check the visible saving and offline status. A failed save is shown as a failure, not as a successful save.
 4. After the first complete load and offline preparation, the cached core content can reopen without a connection. The browser's speech services and optional AI can still require internet access.
@@ -105,6 +105,8 @@ For example, ratings of 4, 5, 5, and 4 yield **90/100**. This is a normalized ru
 ## Profiles, automatic saving, and backups
 
 Each deployment has a local collection of up to eight learner profiles. Selecting a profile separates its settings, progress, notes, and drafts from the other profiles in that collection. This replaces a misleading online-login promise with an explicit **local profile chooser**. Anyone with access to the same browser can switch profiles; there is no password protection, verified identity, cloud account, or teacher database.
+
+First-time visitors create their profile before starting learning activities. Closing the page before finishing setup brings back the creation screen. Returning learners go directly to My progress when opening the site; saved lesson and activity links still open their requested page. Existing profiles and older progress backups remain supported.
 
 | Data | Saved in the selected local profile | Included in that profile's exported backup |
 |---|---|---|

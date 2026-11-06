@@ -1,4 +1,4 @@
-/* English AI Speaking Coach — buildless, dependency-free browser application. */
+/* English Speaking Coach — buildless, dependency-free browser application. */
 (() => {
   'use strict';
   const C = window.CoachContent;
@@ -22,6 +22,7 @@
   const deviceStore = S.create({storage:browserStorage, namespace:new URL('./',location.href).pathname.slice(0,200)});
   const initial = deviceStore.load();
   let state = initial.state, activeProfileId = initial.activeProfileId;
+  let needsProfile = initial.needsProfile;
   let storageStatus = initial.status, storageOK = initial.status.ok;
   let stateDirty = false, notesDirty = false, autosaveTimer = null, externalChanged = false;
   const pendingDrafts = new Map();
@@ -110,8 +111,9 @@
     toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4500);
   }
   function updateShell() {
-    $('profile-name').textContent = state.profile.name;
-    $('profile-initial').textContent = state.profile.name.charAt(0).toUpperCase() || 'L';
+    $('profile-name').textContent = needsProfile ? 'Create profile' : state.profile.name;
+    $('profile-initial').textContent = needsProfile ? '+' : state.profile.name.charAt(0).toUpperCase() || 'L';
+    $('profile-button').setAttribute('aria-label',needsProfile ? 'Create your profile' : 'Open profile and settings');
     $('mode-indicator').innerHTML = `<i></i>${aiEnabled ? 'AI mode enabled' : 'Guided mode'}`;
     const pending=!!autosaveTimer||stateDirty||notesDirty||pendingDrafts.size>0;
     const label=storageOK?(pending?'Saving…':'Saved on device'):'Save needs attention';
@@ -407,6 +409,7 @@
     return deviceStore.listProfiles().map(p=>{const metrics=K.metrics(p.id===activeProfileId?state:p.state);return {...p,metrics,points:metrics.sessionCount*10+metrics.completedCount*20};}).sort((a,b)=>b.points-a.points||a.name.localeCompare(b.name));
   }
   function profiles() {
+    if(needsProfile) return `${pageHeading('Create your profile','A little English. A learning space of your own.')}<section class="panel profile-welcome"><span class="stat-symbol">${icon('person')}</span><h2>Welcome to English Speaking Coach</h2><p>Choose a name to start practising. Your progress, notes and preferences will be saved in this browser, ready for your next visit.</p>${thaiGuide('สร้างโปรไฟล์ผู้เรียนเพื่อเริ่มฝึกภาษาอังกฤษ ครั้งต่อไปจะเปิดหน้าความก้าวหน้าของคุณโดยอัตโนมัติ')}<form id="create-profile-form"><div class="field"><label for="new-profile-name">Learner name</label><input id="new-profile-name" name="learnerName" maxlength="40" required autocomplete="nickname" placeholder="Your first name or nickname" aria-describedby="profile-name-hint profile-error"><small id="profile-name-hint">No email or password needed. Anyone using this browser can open this profile.</small></div><p id="profile-error" role="status"></p><button class="btn" type="submit">Create profile & continue ${icon('arrow')}</button></form><div class="profile-links">${btn('Import a backup','import','text-button small')}${link('Saving & privacy','#/device','text-button small')}</div></section>`;
     const profiles=deviceStore.listProfiles();
     return `${pageHeading('Your space to keep growing.','Choose a learner to keep practice, notes and preferences together.',btn(`${icon('person')} Add learner`,'new-profile','',profiles.length>=S.MAX_PROFILES?'disabled':''))}<div class="notice">${icon('device')}<span>These are local profiles on this browser. No email or password is needed. Anyone using this browser can open them.</span></div><div class="profile-grid">${profiles.map(p=>{const current=p.id===activeProfileId,m=K.metrics(current?state:p.state);return `<article class="panel learner-card ${current?'selected':''}"><div class="learner-card-head"><span class="avatar">${esc(p.name.charAt(0).toUpperCase())}</span>${current?'<span class="tag">Current learner</span>':'<span class="tag">On this device</span>'}</div><h2>${esc(p.name)}</h2><p>${m.sessionCount} ${m.sessionCount===1?'activity':'activities'} · ${m.completedCount} ${m.completedCount===1?'lesson':'lessons'} · ${m.totalMinutes} min</p><div class="actions">${current?btn('Edit preferences','settings','secondary small'):btn('Continue as this learner','switch-profile','small',`data-id="${esc(p.id)}"`)}${profiles.length>1?btn('Remove','delete-profile','text-button small',`data-id="${esc(p.id)}" aria-label="Remove ${esc(p.name)}’s profile"`):''}</div></article>`;}).join('')}</div><section class="panel profile-explainer"><div><h2>One device. Different learning journeys.</h2><p>Create up to ${S.MAX_PROFILES} profiles. Each keeps its own completed activities, learning notes, practice drafts and preferences. This is a convenience for a shared device, not a private account system.</p>${thaiGuide('โปรไฟล์แต่ละคนเก็บความก้าวหน้าและบันทึกแยกกันในเบราว์เซอร์นี้ โดยไม่มีรหัสผ่านและไม่ซิงก์ข้ามอุปกรณ์')}</div><div class="actions">${link('Saving & backups','#/device','secondary')}${link('See local leaderboard','#/leaderboard','secondary')}</div></section>`;
   }
@@ -415,19 +418,32 @@
     showDialog('A fresh space for another learner',`<p class="setting-description">Keep this learner’s practice and notes separate on this device. This profile has no password.</p><div class="field"><label for="new-profile-name">Learner name</label><input id="new-profile-name" maxlength="40" autocomplete="off" placeholder="For example, Mali"><small>Use a first name or nickname. Avoid sensitive personal details.</small></div><div id="profile-error" role="status"></div>`,`${btn('Cancel','close-dialog','secondary')}${btn('Create learner profile','create-profile')}`);
     $('new-profile-name').focus();
   }
-  function applyProfile(result) {
+  function applyProfile(result, destination) {
     setStorageStatus(result.status);
     // Failed operations retain their attempted memory state in the storage layer.
     // Keep the UI aligned, but never label that state as saved.
     if(result.state && result.activeProfileId) {
       stopMedia();aiAbort?.abort();routeTicket++;clock.enabled=false;
       state=result.state;activeProfileId=result.activeProfileId;
+      needsProfile=result.needsProfile;
       stateDirty=!result.status.ok;notesDirty=false;pendingDrafts.clear();
       clearTimeout(autosaveTimer);autosaveTimer=null;
       practiceContext=null;pronunciationContext=null;conversation=null;quiz=null;
       aiEnabled=false;aiToken='';externalChanged=false;
     }
+    if(destination && !needsProfile) history.replaceState(null,'',destination);
     closeDialog();render();$('main').focus();
+  }
+  function createProfile() {
+    const input=$('new-profile-name'), name=input.value.trim();
+    if(!name){$('profile-error').textContent='Enter a learner name to continue.';input.focus();return;}
+    const result=deviceStore.createProfile(name);
+    if(!result.status.ok && ['profile-limit','invalid-state','invalid-profile-name'].includes(result.status.error)) {
+      $('profile-error').textContent=result.status.error==='profile-limit'?`This browser can keep up to ${S.MAX_PROFILES} profiles.`:'Enter a learner name to continue.';
+      input.focus();return;
+    }
+    applyProfile(result,'#/dashboard');
+    toast(result.status.ok?`${state.profile.name}’s profile is ready.`:storageMessage());
   }
   function switchProfile(id) {
     if(id===activeProfileId) return;
@@ -442,7 +458,7 @@
   }
   function featureGuide() {
     const icons={home:'home',lessons:'book',practice:'mic',conversation:'chat',pronunciation:'sound',progress:'chart',quiz:'quiz',leaderboard:'award',about:'info',badges:'award',profiles:'person','mobile-saving':'device'};
-    return `${pageHeading('A little guidance. A confident start.','Everything you can do in your English learning space.',btn(showThaiGuide()?'Hide Thai guidance':'Show Thai guidance','toggle-thai-guide','secondary small'))}<section class="guide-intro"><div><span class="eyebrow">ENGLISH AI SPEAKING COACH</span><h2>Learn it. Say it. Keep going.</h2><p>Build useful vocabulary, try a conversation, and reflect on your next step. Start with guided practice, or use a connected AI coach when your teacher has set one up.</p>${thaiGuide('ฝึกคำศัพท์ พูดภาษาอังกฤษ และทบทวนสิ่งที่เรียนรู้ เริ่มต้นด้วยกิจกรรมแบบมีแนวทาง หรือใช้ AI เมื่อผู้สอนเชื่อมต่อระบบแล้ว')}</div><div class="guide-facts"><span><strong>${C.lessons.length}</strong> practical lessons</span><span><strong>${C.scenarios.length}</strong> conversation topics</span><span><strong>${C.quiz.length}</strong> quiz questions</span></div></section><div class="feature-grid">${C.featureGuide.map((f,i)=>`<article class="panel feature-card"><div class="feature-card-top"><span class="stat-symbol">${icon(icons[f.id]||'spark')}</span><span class="feature-number">${String(i+1).padStart(2,'0')}</span></div><h2>${esc(f.titleEn)}</h2>${thaiGuide(f.titleTh,'thai-feature-title')}<p>${esc(f.descriptionEn)}</p>${thaiGuide(f.descriptionTh)}<p class="feature-limit">${icon('info')}<span>${esc(f.limitationEn)}</span></p>${thaiGuide(f.limitationTh,'feature-limit-thai')}<a class="text-link" href="${esc(f.href)}">Explore ${icon('arrow')}</a></article>`).join('')}</div>`;
+    return `${pageHeading('A little guidance. A confident start.','Everything you can do in your English learning space.',btn(showThaiGuide()?'Hide Thai guidance':'Show Thai guidance','toggle-thai-guide','secondary small'))}<section class="guide-intro"><div><span class="eyebrow">ENGLISH SPEAKING COACH</span><h2>Learn it. Say it. Keep going.</h2><p>Build useful vocabulary, try a conversation, and reflect on your next step. Start with guided practice, or use a connected AI coach when your teacher has set one up.</p>${thaiGuide('ฝึกคำศัพท์ พูดภาษาอังกฤษ และทบทวนสิ่งที่เรียนรู้ เริ่มต้นด้วยกิจกรรมแบบมีแนวทาง หรือใช้ AI เมื่อผู้สอนเชื่อมต่อระบบแล้ว')}</div><div class="guide-facts"><span><strong>${C.lessons.length}</strong> practical lessons</span><span><strong>${C.scenarios.length}</strong> conversation topics</span><span><strong>${C.quiz.length}</strong> quiz questions</span></div></section><div class="feature-grid">${C.featureGuide.map((f,i)=>`<article class="panel feature-card"><div class="feature-card-top"><span class="stat-symbol">${icon(icons[f.id]||'spark')}</span><span class="feature-number">${String(i+1).padStart(2,'0')}</span></div><h2>${esc(f.titleEn)}</h2>${thaiGuide(f.titleTh,'thai-feature-title')}<p>${esc(f.descriptionEn)}</p>${thaiGuide(f.descriptionTh)}<p class="feature-limit">${icon('info')}<span>${esc(f.limitationEn)}</span></p>${thaiGuide(f.limitationTh,'feature-limit-thai')}<a class="text-link" href="${esc(f.href)}">Explore ${icon('arrow')}</a></article>`).join('')}</div>`;
   }
   function deviceView() {
     const d=D?.snapshot()||{online:navigator.onLine,secure:window.isSecureContext,offlineReady:false};
@@ -463,6 +479,7 @@
     return `${pageHeading('A little help, when you need it.','How the coach works, where your data goes, and how to keep your progress.')}<div class="help-grid"><section class="panel"><h2>Common questions</h2><details open><summary>How do I get started?</summary><p>Choose a lesson, read its vocabulary and dialogue, and try the tasks. Use Speaking practice for your own response, Conversation for a four-turn role play, or Pronunciation to compare the words of a short phrase.</p></details><details><summary>Why doesn’t my microphone work?</summary><p>Speech recognition depends on your browser, permissions, device and sometimes a network speech service. Use the HTTPS site, allow microphone access for that site, and check your browser’s support. If it fails, type in the same response box. No activity requires a microphone.</p><p>A browser may send audio to its own service for transcription. This app does not make or store audio recordings.</p></details><details><summary>What does a word-match percentage mean?</summary><p>It compares the written or transcribed words with a target phrase. Punctuation and case are ignored, and word differences reduce the match. It cannot measure how you pronounced a sound, your accent or your English level. Speech recognition may also mishear you.</p></details><details><summary>Is the guided coach artificial intelligence?</summary><p>Guided mode uses planned prompts and simple text checks. Genuine AI feedback is available only when the site owner connects a server. In AI mode, submitted text, the prompt and recent conversation turns are sent to that server and its AI provider.</p></details><details><summary>Where is my progress saved?</summary><p>Completed activities, local profiles, learning notes and unfinished speaking or pronunciation text are saved in this browser. Look for “Saved on device” at the top. They do not sync across devices. Clearing site data or private browsing may remove them. Open Saving & offline access to export a backup or review saving problems.</p></details><details><summary>What if I leave an activity unfinished?</summary><p>Completed activities are added to your history. Learning notes and unfinished Speaking practice or Pronunciation text save automatically after a short pause and when you leave the page. Drafts are kept separately for each topic and profile. An unfinished conversation or quiz is not saved or counted. Active time pauses when the page is hidden or you stop interacting for a minute.</p></details><details><summary>Can I practise offline?</summary><p>After the HTTPS website finishes its first offline setup, core lessons, guided practice, quizzes and local saving can work offline. Check “Ready for offline practice” in Saving & offline access before relying on it. The standalone HTML file also contains the core app. Browser speech features may need the internet, and AI always needs a connection. A progress backup is not an offline copy of the app.</p></details><details><summary>How do I use Thai hints or change the voice?</summary><p>Open your profile at the top of the page. You can switch on Thai vocabulary hints, select US or UK English, and adjust read-aloud speed. The available voices depend on your device.</p></details></section><aside><section class="panel content-prose"><h2>Privacy, plainly</h2><p><strong>Saved here:</strong> your chosen display name, preferences, completion history, notes and unfinished practice text. Speaking drafts are removed after a successful completed submission or when you clear them. Raw audio and full conversations are not stored. Progress backups include your notes but exclude speaking drafts.</p><p><strong>Microphone:</strong> only starts when you choose to use it. Your browser’s speech service may process audio remotely.</p><p><strong>Optional AI:</strong> only the text you submit and its learning context are sent. The classroom access code stays in memory and clears on reload.</p><p><strong>No added tracking:</strong> this app includes no advertising, analytics scripts, remote fonts or third-party image requests. The hosting service may maintain its own access logs.</p>${btn('Export my progress','export','secondary small')}<p class="note">Backups include your notes and display name. Keep them somewhere you trust.</p></section><section class="panel"><h2>Contact your teacher</h2>${contact}</section></aside></div>`;
   }
   function settings() {
+    if(needsProfile){history.replaceState(null,'','#/profiles');render();$('new-profile-name').focus();return;}
     const p=state.profile;
     const configured=validEndpoint(cfg.aiEndpoint);
     showDialog('Make this space yours',`<div class="field"><label for="setting-name">Display name</label><input id="setting-name" value="${esc(p.name)}" maxlength="40" autocomplete="nickname"></div><div class="field-row"><div class="field"><label for="setting-level">Practice level</label><select id="setting-level">${['A1','A2','B1'].map(v=>`<option ${p.level===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label for="setting-goal">Daily goal</label><select id="setting-goal">${[5,10,15,20].map(v=>`<option value="${v}" ${p.goalMinutes===v?'selected':''}>${v} minutes</option>`).join('')}</select></div></div><div class="field-row"><div class="field"><label for="setting-accent">Listening voice</label><select id="setting-accent"><option value="en-US" ${p.accent==='en-US'?'selected':''}>English · United States</option><option value="en-GB" ${p.accent==='en-GB'?'selected':''}>English · United Kingdom</option></select></div><div class="field"><label for="setting-rate">Read-aloud speed</label><select id="setting-rate">${[[.7,'Slow'],[.9,'Comfortable'],[1,'Natural'],[1.1,'A little faster']].map(([v,t])=>`<option value="${v}" ${Math.abs(p.rate-v)<.05?'selected':''}>${t}</option>`).join('')}</select></div></div><label class="checkbox-label"><input type="checkbox" id="setting-thai" ${p.showThai?'checked':''}>Show Thai vocabulary and phrase hints</label><label class="checkbox-label"><input type="checkbox" id="setting-thai-guide" ${showThaiGuide()?'checked':''}>Show Thai guidance and feature explanations</label><div class="profile-links">${btn('Switch or add learner','open-profiles','secondary small')}${btn('Saving & offline access','open-device','secondary small')}</div><h3>Your coach</h3>${configured?`<p class="setting-description">Guided mode works immediately. AI mode sends submitted text and recent conversation context to your configured coach. Use the access code provided by your teacher.</p><label class="checkbox-label"><input type="checkbox" id="setting-ai" ${aiEnabled?'checked':''}>Enable AI feedback and conversation for this visit</label><div class="field" style="margin-top:16px"><label for="setting-code">Classroom access code</label><input type="password" id="setting-code" value="" placeholder="${aiToken?'Code already set for this visit':'Enter your classroom access code'}" autocomplete="off"><small>This is a classroom code, never an AI provider API key. It is cleared when you reload.</small></div>`:`<p class="setting-description">Guided mode is active. The site owner can connect an AI server using the setup files in this project. Everything in the core practice library works without it.</p>`}<h3>Keep a copy of your progress</h3><div class="actions">${btn(`${icon('download')} Export`,'export','secondary small')}${btn('Import backup','import','secondary small')}</div><div id="settings-error"></div>`,`${btn('Cancel','close-dialog','secondary')}${btn('Save preferences','save-settings')}`);
@@ -611,9 +628,12 @@
     flushAutosave();
     stopMedia(); aiAbort?.abort(); routeTicket++; clock.enabled=false;
     const parts=location.hash.replace(/^#\/?/,'').split('/');
-    let page=parts[0]||'home', id=''; try{id=decodeURIComponent(parts[1]||'');}catch{}
+    let page=parts[0]||'dashboard', id=''; try{id=decodeURIComponent(parts[1]||'');}catch{}
     if(page==='progress') page='dashboard';
     if(!titleNames[page]) page='home';
+    if(needsProfile && !['profiles','device','contact'].includes(page)) {
+      page='profiles';id='';history.replaceState(null,'','#/profiles');
+    }
     if(page!=='quiz'&&route.page==='quiz') quiz=null;
     route={page,id};
     const views={home,lessons,practice,conversation:conversations,pronunciation,dashboard:progress,quiz:quizPage,leaderboard:achievements,profiles,device:deviceView,features:featureGuide,about,contact:help};
@@ -624,7 +644,8 @@
     $('main').dataset.view=page;
     const resumeID=page==='practice'?practiceContext?.lessonId:page==='pronunciation'?pronunciationContext?.item.id:id;
     rememberRoute(page,resumeID);
-    $('breadcrumb-current').textContent=titleNames[page]; document.title=`${titleNames[page]} · English AI Speaking Coach`;
+    const title=needsProfile && page==='profiles'?'Create profile':titleNames[page];
+    $('breadcrumb-current').textContent=title; document.title=`${title} · English Speaking Coach`;
     updateShell(); closeMenu(); window.scrollTo({top:0,behavior:'instant'});
   }
   document.addEventListener('click',async(event)=>{
@@ -638,13 +659,7 @@
       case 'open-profiles':closeDialog();location.hash='#/profiles';break;
       case 'open-device':closeDialog();location.hash='#/device';break;
       case 'new-profile':newProfilePrompt();break;
-      case 'create-profile':{
-        const name=$('new-profile-name').value.trim();
-        if(!name){$('profile-error').textContent='Enter a learner name to continue.';$('new-profile-name').focus();break;}
-        const result=deviceStore.createProfile(name);
-        if(!result.status.ok && ['profile-limit','invalid-state'].includes(result.status.error)) {$('profile-error').textContent=result.status.error==='profile-limit'?`This browser can keep up to ${S.MAX_PROFILES} profiles.`:'Choose another learner name.';break;}
-        applyProfile(result);toast(result.status.ok?`${state.profile.name}’s profile is ready.`:storageMessage());break;
-      }
+      case 'create-profile':createProfile();break;
       case 'switch-profile':switchProfile(button.dataset.id);break;
       case 'delete-profile':deleteProfilePrompt(button.dataset.id);break;
       case 'confirm-delete-profile':if($('delete-profile-confirm').value==='REMOVE'){const result=deviceStore.deleteProfile(button.dataset.id);applyProfile(result);toast(result.status.ok?'Learner profile removed from this browser.':storageMessage());}else toast('Type REMOVE exactly to confirm.');break;
@@ -701,11 +716,14 @@
       case 'save-notes':state.notes=$('learning-notes').value;notesDirty=true;toast(flushAutosave()?'Your learning notes are saved.':storageMessage());break;
       case 'export':exportBackup();break;
       case 'import':importBackup();break;
-      case 'confirm-import':if($('app-dialog')._pendingImport){const imported=$('app-dialog')._pendingImport;delete $('app-dialog')._pendingImport;pendingDrafts.clear();notesDirty=false;stateDirty=false;applyProfile(deviceStore.replaceProfile(imported));toast(storageOK?'This learner’s backup has been imported.':storageMessage());}break;
+      case 'confirm-import':if($('app-dialog')._pendingImport){const imported=$('app-dialog')._pendingImport;delete $('app-dialog')._pendingImport;pendingDrafts.clear();notesDirty=false;stateDirty=false;applyProfile(deviceStore.replaceProfile(imported),'#/dashboard');toast(storageOK?'This learner’s backup has been imported.':storageMessage());}break;
       case 'reset':resetPrompt();break;
       case 'confirm-reset':if($('reset-confirm').value==='RESET'){pendingDrafts.clear();notesDirty=false;stateDirty=false;applyProfile(deviceStore.resetProfile());toast(storageOK?'This learner’s progress has been reset.':storageMessage());}else toast('Type RESET exactly to confirm.');break;
       default:break;
     }
+  });
+  document.addEventListener('submit',event=>{
+    if(event.target.id==='create-profile-form'){event.preventDefault();createProfile();}
   });
   document.addEventListener('input',event=>{
     if(event.target.id==='lesson-search'){search=event.target.value;$('lesson-results').innerHTML=lessonResults();}
@@ -769,5 +787,6 @@
   window.addEventListener('storage',event=>{if(event.storageArea===browserStorage && (event.key===null || [deviceStore.keys.main,deviceStore.keys.backup].includes(event.key))){externalChanged=true;updateShell();}});
   window.addEventListener('coach-device-change',()=>{if(route.page==='device'&&!$('app-dialog').open){const focused=document.activeElement?.dataset.action;$('main').innerHTML=deviceView();if(focused)document.querySelector(`[data-action="${focused}"]`)?.focus();}});
   D?.init();
+  if(!location.hash || ['#/','#/home'].includes(location.hash)) history.replaceState(null,'',needsProfile?'#/profiles':'#/dashboard');
   render();
 })();

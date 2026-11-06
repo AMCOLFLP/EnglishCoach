@@ -1,10 +1,10 @@
 {
   "id": "./",
-  "name": "English AI Speaking Coach",
+  "name": "English Speaking Coach",
   "short_name": "English Coach",
   "description": "Practise everyday English, save your progress on this device, and keep your learning space available offline.",
   "lang": "en",
-  "start_url": "./#/home",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7f5",
